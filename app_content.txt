@@ -1,0 +1,1617 @@
+# Flutter Project Knowledge Base
+# Created on Mon May 19 15:10:03 MSK 2025
+# Contents from ./lib directory
+
+## File: lib/app/app.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/presentation/auth/screens/login_screen.dart';
+import 'package:rctms/app/presentation/home/screens/home_screen.dart';
+import 'package:rctms/app/providers/auth_providers.dart';
+import 'package:rctms/app/theme.dart';
+class RCTMSApp extends ConsumerStatefulWidget {
+ const RCTMSApp({super.key});
+ @override
+ RCTMSAppState createState() => RCTMSAppState();
+}
+class RCTMSAppState extends ConsumerState<RCTMSApp> {
+ @override
+ void initState() {
+ super.initState();
+ WidgetsBinding.instance.addPostFrameCallback((_) {
+ ref.read(authProvider.notifier).checkAuthStatus();
+ });
+ }
+ 
+ @override
+ Widget build(BuildContext context) {
+ final authState = ref.watch(authProvider);
+ 
+ return MaterialApp(
+ title: 'RCTMS',
+ theme: AppTheme.lightTheme,
+ darkTheme: AppTheme.darkTheme,
+ themeMode: ThemeMode.system,
+ home: authState.authStatus is AsyncLoading
+ ? const Scaffold(
+ body: Center(
+ child: CircularProgressIndicator(),
+ ),
+ )
+ : authState.isAuthenticated
+ ? const HomeScreen()
+ : const LoginScreen(),
+ debugShowCheckedModeBanner: false,
+ );
+ }
+}
+```
+
+## File: lib/app/core/constants/api_constants.dart
+```dart
+class ApiConstants {
+ ApiConstants._();
+ 
+ static const String baseUrl = 'http://127.0.0.1:4000'; // For Android emulator pointing to localhost
+ static const String graphqlEndpoint = '$baseUrl/api/graphql';
+ static const String socketEndpoint = '$baseUrl/socket';
+ 
+ static const String loginEndpoint = '$baseUrl/api/users/sign_in';
+ static const String registerEndpoint = '$baseUrl/api/users';
+ 
+ static const Map<String, String> defaultHeaders = {
+ 'Content-Type': 'application/json',
+ 'Accept': 'application/json',
+ };
+}
+```
+
+## File: lib/app/core/errors/exceptions.dart
+```dart
+class ServerException implements Exception {
+ final String message;
+ 
+ ServerException(this.message);
+ 
+ @override
+ String toString() => 'ServerException: $message';
+}
+class CacheException implements Exception {
+ final String message;
+ 
+ CacheException(this.message);
+ 
+ @override
+ String toString() => 'CacheException: $message';
+}
+class NetworkException implements Exception {
+ final String message;
+ 
+ NetworkException(this.message);
+ 
+ @override
+ String toString() => 'NetworkException: $message';
+}
+class AuthenticationException implements Exception {
+ final String message;
+ 
+ AuthenticationException(this.message);
+ 
+ @override
+ String toString() => 'AuthenticationException: $message';
+}
+```
+
+## File: lib/app/core/errors/failure.dart
+```dart
+abstract class Failure {
+ final String message;
+ 
+ const Failure(this.message);
+}
+class ServerFailure extends Failure {
+ const ServerFailure(String message) : super(message);
+}
+class CacheFailure extends Failure {
+ const CacheFailure(String message) : super(message);
+}
+class NetworkFailure extends Failure {
+ const NetworkFailure(String message) : super(message);
+}
+class AuthenticationFailure extends Failure {
+ const AuthenticationFailure(String message) : super(message);
+}
+```
+
+## File: lib/app/core/network/graphql_client.dart
+```dart
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:rctms/app/core/constants/api_constants.dart';
+import 'package:rctms/app/core/storage/secure_storage.dart';
+class GraphQLClientProvider {
+ final SecureStorage secureStorage;
+ 
+ GraphQLClientProvider(this.secureStorage);
+ 
+ Future<GraphQLClient> getClient() async {
+ final token = await secureStorage.getAuthToken();
+ 
+ final httpLink = HttpLink(ApiConstants.graphqlEndpoint);
+ 
+ final authLink = AuthLink(
+ getToken: () => token != null ? 'Bearer $token' : null,
+ );
+ 
+ final Link link = authLink.concat(httpLink);
+ 
+ return GraphQLClient(
+ cache: GraphQLCache(),
+ link: link,
+ );
+ }
+ 
+ Future<GraphQLClient> getWebSocketClient() async {
+ final token = await secureStorage.getAuthToken();
+ 
+ final httpLink = HttpLink(ApiConstants.graphqlEndpoint);
+ 
+ final wsLink = WebSocketLink(
+ ApiConstants.socketEndpoint,
+ config: SocketClientConfig(
+ initialPayload: token != null 
+ ? {'token': token} 
+ : null,
+ autoReconnect: true,
+ ),
+ );
+ 
+ final link = Link.split(
+ (request) => request.isSubscription,
+ wsLink,
+ httpLink,
+ );
+ 
+ return GraphQLClient(
+ cache: GraphQLCache(),
+ link: link,
+ );
+ }
+}
+```
+
+## File: lib/app/core/network/network_info.dart
+```dart
+import 'package:connectivity_plus/connectivity_plus.dart';
+abstract class NetworkInfo {
+ Future<bool> get isConnected;
+}
+class NetworkInfoImpl implements NetworkInfo {
+ final Connectivity connectivity;
+ 
+ NetworkInfoImpl(this.connectivity);
+ 
+ @override
+ Future<bool> get isConnected async {
+ final connectivityResult = await connectivity.checkConnectivity();
+ return connectivityResult != ConnectivityResult.none;
+ }
+}
+```
+
+## File: lib/app/core/storage/secure_storage.dart
+```dart
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+class SecureStorage {
+ final FlutterSecureStorage _storage;
+ 
+ SecureStorage(this._storage);
+ 
+ static const String authTokenKey = 'auth_token';
+ static const String refreshTokenKey = 'refresh_token';
+ static const String userIdKey = 'user_id';
+ 
+ Future<void> storeAuthToken(String token) async {
+ await _storage.write(key: authTokenKey, value: token);
+ }
+ 
+ Future<String?> getAuthToken() async {
+ return await _storage.read(key: authTokenKey);
+ }
+ 
+ Future<void> removeAuthToken() async {
+ await _storage.delete(key: authTokenKey);
+ }
+ 
+ Future<void> storeUserId(String userId) async {
+ await _storage.write(key: userIdKey, value: userId);
+ }
+ 
+ Future<String?> getUserId() async {
+ return await _storage.read(key: userIdKey);
+ }
+ 
+ Future<void> clearAll() async {
+ await _storage.deleteAll();
+ }
+}
+```
+
+## File: lib/app/data/models/comment_model.dart
+```dart
+import 'package:json_annotation/json_annotation.dart';
+import 'package:rctms/app/domain/entities/comment.dart';
+part 'comment_model.g.dart'; // Will be generated by build_runner
+@JsonSerializable()
+class CommentModel extends Comment {
+ CommentModel({
+ required String id,
+ required String content,
+ required String taskId,
+ required String userId,
+ required DateTime createdAt,
+ required DateTime updatedAt,
+ }) : super(
+ id: id,
+ content: content,
+ taskId: taskId,
+ userId: userId,
+ createdAt: createdAt,
+ updatedAt: updatedAt,
+ );
+ 
+ factory CommentModel.fromJson(Map<String, dynamic> json) => 
+ _$CommentModelFromJson(json);
+ 
+ Map<String, dynamic> toJson() => _$CommentModelToJson(this);
+ 
+ factory CommentModel.fromEntity(Comment comment) => CommentModel(
+ id: comment.id,
+ content: comment.content,
+ taskId: comment.taskId,
+ userId: comment.userId,
+ createdAt: comment.createdAt,
+ updatedAt: comment.updatedAt,
+ );
+}
+```
+
+## File: lib/app/data/models/comment_model.g.dart
+```dart
+part of 'comment_model.dart';
+CommentModel _$CommentModelFromJson(Map<String, dynamic> json) => CommentModel(
+ id: json['id'] as String,
+ content: json['content'] as String,
+ taskId: json['taskId'] as String,
+ userId: json['userId'] as String,
+ createdAt: DateTime.parse(json['createdAt'] as String),
+ updatedAt: DateTime.parse(json['updatedAt'] as String),
+ );
+Map<String, dynamic> _$CommentModelToJson(CommentModel instance) =>
+ <String, dynamic>{
+ 'id': instance.id,
+ 'content': instance.content,
+ 'taskId': instance.taskId,
+ 'userId': instance.userId,
+ 'createdAt': instance.createdAt.toIso8601String(),
+ 'updatedAt': instance.updatedAt.toIso8601String(),
+ };
+```
+
+## File: lib/app/data/models/project_model.dart
+```dart
+import 'package:json_annotation/json_annotation.dart';
+import 'package:rctms/app/domain/entities/project.dart';
+part 'project_model.g.dart'; // Will be generated by build_runner
+@JsonSerializable()
+class ProjectModel extends Project {
+ ProjectModel({
+ required String id,
+ required String name,
+ String? description,
+ required String ownerId,
+ required DateTime createdAt,
+ required DateTime updatedAt,
+ }) : super(
+ id: id,
+ name: name,
+ description: description,
+ ownerId: ownerId,
+ createdAt: createdAt,
+ updatedAt: updatedAt,
+ );
+ 
+ factory ProjectModel.fromJson(Map<String, dynamic> json) => 
+ _$ProjectModelFromJson(json);
+ 
+ Map<String, dynamic> toJson() => _$ProjectModelToJson(this);
+ 
+ factory ProjectModel.fromEntity(Project project) => ProjectModel(
+ id: project.id,
+ name: project.name,
+ description: project.description,
+ ownerId: project.ownerId,
+ createdAt: project.createdAt,
+ updatedAt: project.updatedAt,
+ );
+}
+```
+
+## File: lib/app/data/models/project_model.g.dart
+```dart
+part of 'project_model.dart';
+ProjectModel _$ProjectModelFromJson(Map<String, dynamic> json) => ProjectModel(
+ id: json['id'] as String,
+ name: json['name'] as String,
+ description: json['description'] as String?,
+ ownerId: json['ownerId'] as String,
+ createdAt: DateTime.parse(json['createdAt'] as String),
+ updatedAt: DateTime.parse(json['updatedAt'] as String),
+ );
+Map<String, dynamic> _$ProjectModelToJson(ProjectModel instance) =>
+ <String, dynamic>{
+ 'id': instance.id,
+ 'name': instance.name,
+ 'description': instance.description,
+ 'ownerId': instance.ownerId,
+ 'createdAt': instance.createdAt.toIso8601String(),
+ 'updatedAt': instance.updatedAt.toIso8601String(),
+ };
+```
+
+## File: lib/app/data/models/task_model.dart
+```dart
+import 'package:json_annotation/json_annotation.dart';
+import 'package:rctms/app/domain/entities/task.dart';
+part 'task_model.g.dart'; // Will be generated by build_runner
+@JsonSerializable()
+class TaskModel extends Task {
+ TaskModel({
+ required String id,
+ required String title,
+ String? description,
+ required TaskStatus status,
+ required TaskPriority priority,
+ DateTime? dueDate,
+ required String projectId,
+ String? assigneeId,
+ required String creatorId,
+ required DateTime createdAt,
+ required DateTime updatedAt,
+ }) : super(
+ id: id,
+ title: title,
+ description: description,
+ status: status,
+ priority: priority,
+ dueDate: dueDate,
+ projectId: projectId,
+ assigneeId: assigneeId,
+ creatorId: creatorId,
+ createdAt: createdAt,
+ updatedAt: updatedAt,
+ );
+ 
+ factory TaskModel.fromJson(Map<String, dynamic> json) => 
+ _$TaskModelFromJson(json);
+ 
+ Map<String, dynamic> toJson() => _$TaskModelToJson(this);
+ 
+ factory TaskModel.fromEntity(Task task) => TaskModel(
+ id: task.id,
+ title: task.title,
+ description: task.description,
+ status: task.status,
+ priority: task.priority,
+ dueDate: task.dueDate,
+ projectId: task.projectId,
+ assigneeId: task.assigneeId,
+ creatorId: task.creatorId,
+ createdAt: task.createdAt,
+ updatedAt: task.updatedAt,
+ );
+}
+```
+
+## File: lib/app/data/models/task_model.g.dart
+```dart
+part of 'task_model.dart';
+TaskModel _$TaskModelFromJson(Map<String, dynamic> json) => TaskModel(
+ id: json['id'] as String,
+ title: json['title'] as String,
+ description: json['description'] as String?,
+ status: $enumDecode(_$TaskStatusEnumMap, json['status']),
+ priority: $enumDecode(_$TaskPriorityEnumMap, json['priority']),
+ dueDate: json['dueDate'] == null
+ ? null
+ : DateTime.parse(json['dueDate'] as String),
+ projectId: json['projectId'] as String,
+ assigneeId: json['assigneeId'] as String?,
+ creatorId: json['creatorId'] as String,
+ createdAt: DateTime.parse(json['createdAt'] as String),
+ updatedAt: DateTime.parse(json['updatedAt'] as String),
+ );
+Map<String, dynamic> _$TaskModelToJson(TaskModel instance) => <String, dynamic>{
+ 'id': instance.id,
+ 'title': instance.title,
+ 'description': instance.description,
+ 'status': _$TaskStatusEnumMap[instance.status]!,
+ 'priority': _$TaskPriorityEnumMap[instance.priority]!,
+ 'dueDate': instance.dueDate?.toIso8601String(),
+ 'projectId': instance.projectId,
+ 'assigneeId': instance.assigneeId,
+ 'creatorId': instance.creatorId,
+ 'createdAt': instance.createdAt.toIso8601String(),
+ 'updatedAt': instance.updatedAt.toIso8601String(),
+ };
+const _$TaskStatusEnumMap = {
+ TaskStatus.pending: 'pending',
+ TaskStatus.inProgress: 'inProgress',
+ TaskStatus.completed: 'completed',
+};
+const _$TaskPriorityEnumMap = {
+ TaskPriority.low: 'low',
+ TaskPriority.medium: 'medium',
+ TaskPriority.high: 'high',
+};
+```
+
+## File: lib/app/data/models/user_model.dart
+```dart
+import 'package:json_annotation/json_annotation.dart';
+import 'package:rctms/app/domain/entities/user.dart';
+part 'user_model.g.dart'; // Will be generated by build_runner
+@JsonSerializable()
+class UserModel extends User {
+ UserModel({
+ required String id,
+ required String email,
+ required String username,
+ required DateTime createdAt,
+ required DateTime updatedAt,
+ }) : super(
+ id: id,
+ email: email,
+ username: username,
+ createdAt: createdAt,
+ updatedAt: updatedAt,
+ );
+ 
+ factory UserModel.fromJson(Map<String, dynamic> json) => 
+ _$UserModelFromJson(json);
+ 
+ Map<String, dynamic> toJson() => _$UserModelToJson(this);
+ 
+ factory UserModel.fromEntity(User user) => UserModel(
+ id: user.id,
+ email: user.email,
+ username: user.username,
+ createdAt: user.createdAt,
+ updatedAt: user.updatedAt,
+ );
+}
+```
+
+## File: lib/app/data/models/user_model.g.dart
+```dart
+part of 'user_model.dart';
+UserModel _$UserModelFromJson(Map<String, dynamic> json) => UserModel(
+ id: json['id'] as String,
+ email: json['email'] as String,
+ username: json['username'] as String,
+ createdAt: DateTime.parse(json['createdAt'] as String),
+ updatedAt: DateTime.parse(json['updatedAt'] as String),
+ );
+Map<String, dynamic> _$UserModelToJson(UserModel instance) => <String, dynamic>{
+ 'id': instance.id,
+ 'email': instance.email,
+ 'username': instance.username,
+ 'createdAt': instance.createdAt.toIso8601String(),
+ 'updatedAt': instance.updatedAt.toIso8601String(),
+ };
+```
+
+## File: lib/app/data/repositories/auth_repository.dart
+```dart
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:rctms/app/core/errors/exceptions.dart'as app_exceptions; 
+import 'package:rctms/app/core/network/graphql_client.dart';
+import 'package:rctms/app/data/models/user_model.dart';
+class AuthRepository {
+ final GraphQLClientProvider graphQLClientProvider;
+ 
+ AuthRepository({required this.graphQLClientProvider});
+ 
+ Future<Map<String, dynamic>> register(String email, String username, String password) async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ 
+ const String mutation = r'''
+ mutation Register($input: UserRegistrationInput!) {
+ register(input: $input) {
+ token
+ user {
+ id
+ email
+ username
+ insertedAt
+ updatedAt
+ }
+ }
+ }
+ ''';
+ 
+ final MutationOptions options = MutationOptions(
+ document: gql(mutation),
+ variables: {
+ 'input': {
+ 'email': email,
+ 'username': username,
+ 'password': password
+ }
+ },
+ );
+ 
+ final QueryResult result = await client.mutate(options);
+ 
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ throw app_exceptions.ServerException(result.exception!.graphqlErrors.first.message);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException("Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Registration failed');
+ }
+ 
+ final registerData = result.data!['register'];
+ final userData = UserModel.fromJson({
+ 'id': registerData['user']['id'],
+ 'email': registerData['user']['email'],
+ 'username': registerData['user']['username'],
+ 'createdAt': registerData['user']['insertedAt'],
+ 'updatedAt': registerData['user']['updatedAt'],
+ });
+ 
+ return {
+ 'user': userData,
+ 'token': registerData['token'],
+ };
+ } catch (e) {
+ if (e is app_exceptions.ServerException || 
+ e is app_exceptions.NetworkException ||
+ e is app_exceptions.AuthenticationException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+ Future<Map<String, dynamic>> login(String email, String password) async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ 
+ const String mutation = r'''
+ mutation Login($input: UserLoginInput!) {
+ login(input: $input) {
+ token
+ user {
+ id
+ email
+ username
+ insertedAt
+ updatedAt
+ }
+ }
+ }
+ ''';
+ 
+ final MutationOptions options = MutationOptions(
+ document: gql(mutation),
+ variables: {
+ 'input': {
+ 'email': email,
+ 'password': password
+ }
+ },
+ );
+ 
+ final QueryResult result = await client.mutate(options);
+ 
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ final errorMessage = result.exception!.graphqlErrors.first.message;
+ if (errorMessage.contains('Invalid email or password')) {
+ throw app_exceptions.AuthenticationException('Invalid email or password');
+ }
+ throw app_exceptions.ServerException(errorMessage);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException("Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Login failed');
+ }
+ 
+ final loginData = result.data!['login'];
+ final userData = UserModel.fromJson({
+ 'id': loginData['user']['id'],
+ 'email': loginData['user']['email'],
+ 'username': loginData['user']['username'],
+ 'createdAt': loginData['user']['insertedAt'],
+ 'updatedAt': loginData['user']['updatedAt'],
+ });
+ 
+ return {
+ 'user': userData,
+ 'token': loginData['token'],
+ };
+ } catch (e) {
+ if (e is app_exceptions.ServerException || 
+ e is app_exceptions.NetworkException ||
+ e is app_exceptions.AuthenticationException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+ 
+ Future<UserModel?> getCurrentUser() async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ 
+ const String query = r'''
+ query Me {
+ me {
+ id
+ email
+ username
+ insertedAt
+ updatedAt
+ }
+ }
+ ''';
+ 
+ final QueryOptions options = QueryOptions(
+ document: gql(query),
+ );
+ 
+ final QueryResult result = await client.query(options);
+ 
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.any((error) => 
+ error.message.contains('not authenticated') || 
+ error.message.contains('not found'))) {
+ return null;
+ }
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ throw app_exceptions.ServerException(result.exception!.graphqlErrors.first.message);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException("Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Failed to fetch user data');
+ }
+ 
+ if (result.data == null || result.data!['me'] == null) {
+ return null;
+ }
+ 
+ final userData = result.data!['me'];
+ return UserModel.fromJson({
+ 'id': userData['id'],
+ 'email': userData['email'],
+ 'username': userData['username'],
+ 'createdAt': userData['insertedAt'],
+ 'updatedAt': userData['updatedAt'],
+ });
+ } catch (e) {
+ if (e is app_exceptions.ServerException || 
+ e is app_exceptions.NetworkException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+}
+```
+
+## File: lib/app/domain/entities/comment.dart
+```dart
+class Comment {
+ final String id;
+ final String content;
+ final String taskId;
+ final String userId;
+ final DateTime createdAt;
+ final DateTime updatedAt;
+ 
+ Comment({
+ required this.id,
+ required this.content,
+ required this.taskId,
+ required this.userId,
+ required this.createdAt,
+ required this.updatedAt,
+ });
+}
+```
+
+## File: lib/app/domain/entities/project.dart
+```dart
+class Project {
+ final String id;
+ final String name;
+ final String? description;
+ final String ownerId;
+ final DateTime createdAt;
+ final DateTime updatedAt;
+ 
+ Project({
+ required this.id,
+ required this.name,
+ this.description,
+ required this.ownerId,
+ required this.createdAt,
+ required this.updatedAt,
+ });
+}
+```
+
+## File: lib/app/domain/entities/task.dart
+```dart
+enum TaskStatus { pending, inProgress, completed }
+enum TaskPriority { low, medium, high }
+class Task {
+ final String id;
+ final String title;
+ final String? description;
+ final TaskStatus status;
+ final TaskPriority priority;
+ final DateTime? dueDate;
+ final String projectId;
+ final String? assigneeId;
+ final String creatorId;
+ final DateTime createdAt;
+ final DateTime updatedAt;
+ 
+ Task({
+ required this.id,
+ required this.title,
+ this.description,
+ required this.status,
+ required this.priority,
+ this.dueDate,
+ required this.projectId,
+ this.assigneeId,
+ required this.creatorId,
+ required this.createdAt,
+ required this.updatedAt,
+ });
+}
+```
+
+## File: lib/app/domain/entities/user.dart
+```dart
+class User {
+ final String id;
+ final String email;
+ final String username;
+ final DateTime createdAt;
+ final DateTime updatedAt;
+ 
+ User({
+ required this.id,
+ required this.email,
+ required this.username,
+ required this.createdAt,
+ required this.updatedAt,
+ });
+}
+```
+
+## File: lib/app/presentation/auth/screens/login_screen.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:rctms/app/presentation/auth/screens/register_screen.dart';
+import 'package:rctms/app/presentation/auth/widgets/login_form.dart';
+class LoginScreen extends StatelessWidget {
+ const LoginScreen({super.key});
+ @override
+ Widget build(BuildContext context) {
+ return Scaffold(
+ appBar: AppBar(
+ title: const Text('RCTMS Login'),
+ ),
+ body: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Center(
+ child: SingleChildScrollView(
+ child: Column(
+ mainAxisAlignment: MainAxisAlignment.center,
+ children: [
+ const Icon(
+ Icons.task_alt,
+ size: 80,
+ color: Colors.deepPurpleAccent,
+ ),
+ const SizedBox(height: 24),
+ const Text(
+ 'Realtime Collaborative\nTask Management System',
+ style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+ textAlign: TextAlign.center,
+ ),
+ const SizedBox(height: 40),
+ const LoginForm(),
+ const SizedBox(height: 24),
+ TextButton(
+ onPressed: () {
+ Navigator.of(context).push(
+ MaterialPageRoute(builder: (_) => const RegisterScreen()),
+ );
+ },
+ child: const Text('Don\'t have an account? Register here'),
+ ),
+ ],
+ ),
+ ),
+ ),
+ ),
+ );
+ }
+}
+```
+
+## File: lib/app/presentation/auth/screens/register_screen.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:rctms/app/presentation/auth/widgets/register_form.dart';
+class RegisterScreen extends StatelessWidget {
+ const RegisterScreen({super.key});
+ 
+ @override
+ Widget build(BuildContext context) {
+ return Scaffold(
+ appBar: AppBar(
+ title: const Text('RCTMS Register'),
+ ),
+ body: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Center(
+ child: SingleChildScrollView(
+ child: Column(
+ mainAxisAlignment: MainAxisAlignment.center,
+ children: [
+ const Icon(
+ Icons.task_alt,
+ size: 80,
+ color: Colors.blue,
+ ),
+ const SizedBox(height: 24),
+ const Text(
+ 'Join Realtime Collaborative\nTask Management System',
+ style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+ textAlign: TextAlign.center,
+ ),
+ const SizedBox(height: 40),
+ const RegisterForm(),
+ const SizedBox(height: 24),
+ TextButton(
+ onPressed: () {
+ Navigator.of(context).pop();
+ },
+ child: const Text('Already have an account? Login here'),
+ ),
+ ],
+ ),
+ ),
+ ),
+ ),
+ );
+ }
+}
+```
+
+## File: lib/app/presentation/auth/widgets/login_form.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/presentation/home/screens/home_screen.dart';
+import 'package:rctms/app/providers/auth_providers.dart';
+class LoginForm extends ConsumerStatefulWidget {
+ const LoginForm({Key? key}) : super(key: key);
+ @override
+ LoginFormState createState() => LoginFormState();
+}
+class LoginFormState extends ConsumerState<LoginForm> {
+ final _formKey = GlobalKey<FormState>();
+ final _emailController = TextEditingController();
+ final _passwordController = TextEditingController();
+ bool _obscurePassword = true;
+ String? _errorMessage;
+ @override
+ void dispose() {
+ _emailController.dispose();
+ _passwordController.dispose();
+ super.dispose();
+ }
+ @override
+ Widget build(BuildContext context) {
+ final authState = ref.watch(authProvider);
+ 
+ ref.listen<AuthState>(authProvider, (previous, current) {
+ if (current.authStatus is AsyncError) {
+ final error = (current.authStatus as AsyncError).error;
+ 
+ String errorMessage = 'An error occurred';
+ 
+ if (error is Exception) {
+ if (error.toString().contains('NetworkException')) {
+ errorMessage = error.toString().contains(':') 
+ ? error.toString().split(':').last.trim() 
+ : 'Connection error';
+ } else if (error.toString().contains('ServerException')) {
+ errorMessage = error.toString().contains(':') 
+ ? error.toString().split(':').last.trim() 
+ : 'Server error';
+ } else if (error.toString().contains('AuthenticationException')) {
+ errorMessage = error.toString().contains(':') 
+ ? error.toString().split(':').last.trim() 
+ : 'Authentication failed';
+ } else {
+ errorMessage = 'Login failed: Invalid credentials';
+ }
+ } else {
+ errorMessage = error.toString();
+ }
+ 
+ setState(() {
+ _errorMessage = errorMessage;
+ });
+ 
+ ScaffoldMessenger.of(context).showSnackBar(
+ SnackBar(
+ content: Text(errorMessage),
+ backgroundColor: Colors.red,
+ duration: const Duration(seconds: 3),
+ ),
+ );
+ } else if (current.isAuthenticated) {
+ setState(() {
+ _errorMessage = null;
+ });
+ 
+ Navigator.of(context).pushReplacement(
+ MaterialPageRoute(builder: (_) => const HomeScreen()),
+ );
+ }
+ });
+ return Form(
+ key: _formKey,
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.stretch,
+ children: [
+ TextFormField(
+ controller: _emailController,
+ decoration: const InputDecoration(
+ labelText: 'Email',
+ prefixIcon: Icon(Icons.email),
+ ),
+ keyboardType: TextInputType.emailAddress,
+ textInputAction: TextInputAction.next,
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please enter your email';
+ }
+ if (!value.contains('@') || !value.contains('.')) {
+ return 'Please enter a valid email';
+ }
+ return null;
+ },
+ ),
+ const SizedBox(height: 16),
+ 
+ TextFormField(
+ controller: _passwordController,
+ decoration: InputDecoration(
+ labelText: 'Password',
+ prefixIcon: const Icon(Icons.lock),
+ suffixIcon: IconButton(
+ icon: Icon(
+ _obscurePassword ? Icons.visibility : Icons.visibility_off,
+ ),
+ onPressed: () {
+ setState(() {
+ _obscurePassword = !_obscurePassword;
+ });
+ },
+ ),
+ ),
+ obscureText: _obscurePassword,
+ textInputAction: TextInputAction.done,
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please enter your password';
+ }
+ if (value.length < 6) {
+ return 'Password must be at least 6 characters';
+ }
+ return null;
+ },
+ ),
+ 
+ if (_errorMessage != null)
+ Padding(
+ padding: const EdgeInsets.only(top: 16),
+ child: Text(
+ _errorMessage!,
+ style: const TextStyle(
+ color: Colors.red,
+ fontSize: 14,
+ ),
+ textAlign: TextAlign.center,
+ ),
+ ),
+ 
+ const SizedBox(height: 24),
+ 
+ SizedBox(
+ height: 50,
+ child: ElevatedButton(
+ onPressed: authState.authStatus is AsyncLoading 
+ ? null 
+ : _login,
+ style: ElevatedButton.styleFrom(
+ shape: RoundedRectangleBorder(
+ borderRadius: BorderRadius.circular(8),
+ ),
+ ),
+ child: authState.authStatus is AsyncLoading
+ ? const CircularProgressIndicator()
+ : const Text('Login', style: TextStyle(fontSize: 16)),
+ ),
+ ),
+ ],
+ ),
+ );
+ }
+ 
+ void _login() {
+ setState(() {
+ _errorMessage = null;
+ });
+ 
+ if (_formKey.currentState!.validate()) {
+ ref.read(authProvider.notifier).login(
+ _emailController.text.trim(),
+ _passwordController.text,
+ );
+ }
+ }
+}
+```
+
+## File: lib/app/presentation/auth/widgets/register_form.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/presentation/home/screens/home_screen.dart';
+import 'package:rctms/app/providers/auth_providers.dart';
+class RegisterForm extends ConsumerStatefulWidget {
+ const RegisterForm({Key? key}) : super(key: key);
+ @override
+ RegisterFormState createState() => RegisterFormState();
+}
+class RegisterFormState extends ConsumerState<RegisterForm> {
+ final _formKey = GlobalKey<FormState>();
+ final _emailController = TextEditingController();
+ final _usernameController = TextEditingController();
+ final _passwordController = TextEditingController();
+ final _confirmPasswordController = TextEditingController();
+ 
+ bool _obscurePassword = true;
+ bool _obscureConfirmPassword = true;
+ @override
+ void dispose() {
+ _emailController.dispose();
+ _usernameController.dispose();
+ _passwordController.dispose();
+ _confirmPasswordController.dispose();
+ super.dispose();
+ }
+ @override
+ Widget build(BuildContext context) {
+ final authState = ref.watch(authProvider);
+ 
+ ref.listen<AuthState>(authProvider, (_, state) {
+ if (state.authStatus is AsyncError) {
+ final error = (state.authStatus as AsyncError).error;
+ ScaffoldMessenger.of(context).showSnackBar(
+ SnackBar(content: Text(error.toString())),
+ );
+ } else if (state.isAuthenticated) {
+ Navigator.of(context).pushReplacement(
+ MaterialPageRoute(builder: (_) => const HomeScreen()),
+ );
+ }
+ });
+ 
+ return Form(
+ key: _formKey,
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.stretch,
+ children: [
+ TextFormField(
+ controller: _emailController,
+ decoration: const InputDecoration(
+ labelText: 'Email',
+ prefixIcon: Icon(Icons.email),
+ ),
+ keyboardType: TextInputType.emailAddress,
+ textInputAction: TextInputAction.next,
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please enter your email';
+ }
+ if (!value.contains('@') || !value.contains('.')) {
+ return 'Please enter a valid email';
+ }
+ return null;
+ },
+ ),
+ const SizedBox(height: 16),
+ 
+ TextFormField(
+ controller: _usernameController,
+ decoration: const InputDecoration(
+ labelText: 'Username',
+ prefixIcon: Icon(Icons.person),
+ ),
+ textInputAction: TextInputAction.next,
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please enter a username';
+ }
+ if (value.length < 3) {
+ return 'Username must be at least 3 characters';
+ }
+ return null;
+ },
+ ),
+ const SizedBox(height: 16),
+ 
+ TextFormField(
+ controller: _passwordController,
+ decoration: InputDecoration(
+ labelText: 'Password',
+ prefixIcon: const Icon(Icons.lock),
+ suffixIcon: IconButton(
+ icon: Icon(
+ _obscurePassword ? Icons.visibility : Icons.visibility_off,
+ ),
+ onPressed: () {
+ setState(() {
+ _obscurePassword = !_obscurePassword;
+ });
+ },
+ ),
+ ),
+ obscureText: _obscurePassword,
+ textInputAction: TextInputAction.next,
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please enter a password';
+ }
+ if (value.length < 6) {
+ return 'Password must be at least 6 characters';
+ }
+ return null;
+ },
+ ),
+ const SizedBox(height: 16),
+ 
+ TextFormField(
+ controller: _confirmPasswordController,
+ decoration: InputDecoration(
+ labelText: 'Confirm Password',
+ prefixIcon: const Icon(Icons.lock_outline),
+ suffixIcon: IconButton(
+ icon: Icon(
+ _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+ ),
+ onPressed: () {
+ setState(() {
+ _obscureConfirmPassword = !_obscureConfirmPassword;
+ });
+ },
+ ),
+ ),
+ obscureText: _obscureConfirmPassword,
+ textInputAction: TextInputAction.done,
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please confirm your password';
+ }
+ if (value != _passwordController.text) {
+ return 'Passwords do not match';
+ }
+ return null;
+ },
+ ),
+ const SizedBox(height: 24),
+ 
+ SizedBox(
+ height: 50,
+ child: ElevatedButton(
+ onPressed: authState.authStatus is AsyncLoading 
+ ? null 
+ : _register,
+ style: ElevatedButton.styleFrom(
+ shape: RoundedRectangleBorder(
+ borderRadius: BorderRadius.circular(8),
+ ),
+ ),
+ child: authState.authStatus is AsyncLoading
+ ? const CircularProgressIndicator()
+ : const Text('Register', style: TextStyle(fontSize: 16)),
+ ),
+ ),
+ ],
+ ),
+ );
+ }
+ 
+ void _register() {
+ if (_formKey.currentState!.validate()) {
+ ref.read(authProvider.notifier).register(
+ _emailController.text.trim(),
+ _usernameController.text.trim(),
+ _passwordController.text,
+ );
+ }
+ }
+}
+```
+
+## File: lib/app/presentation/home/screens/home_screen.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/presentation/auth/screens/login_screen.dart';
+import 'package:rctms/app/providers/auth_providers.dart';
+class HomeScreen extends ConsumerWidget {
+ const HomeScreen({super.key});
+ 
+ @override
+ Widget build(BuildContext context, WidgetRef ref) {
+ final authState = ref.watch(authProvider);
+ 
+ return Scaffold(
+ appBar: AppBar(
+ title: const Text('RCTMS'),
+ actions: [
+ IconButton(
+ icon: const Icon(Icons.logout),
+ onPressed: () {
+ final navigator = Navigator.of(context);
+ 
+ ref.read(authProvider.notifier).logout().then((_) {
+ navigator.pushReplacement(
+ MaterialPageRoute(builder: (_) => const LoginScreen()),
+ );
+ });
+ },
+ ),
+ ],
+ ),
+ body: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.stretch,
+ children: [
+ Card(
+ child: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.start,
+ children: [
+ Text(
+ 'Welcome, ${authState.user?.username ?? 'User'}!',
+ style: Theme.of(context).textTheme.headlineSmall,
+ ),
+ const SizedBox(height: 8),
+ Text('Email: ${authState.user?.email ?? 'Not available'}'),
+ ],
+ ),
+ ),
+ ),
+ const SizedBox(height: 24),
+ const Text(
+ 'This is the home screen of the RCTMS app.',
+ style: TextStyle(fontSize: 16),
+ ),
+ const SizedBox(height: 16),
+ const Text(
+ 'Here you will see your projects and tasks.',
+ style: TextStyle(fontSize: 16),
+ ),
+ ],
+ ),
+ ),
+ );
+ }
+}
+```
+
+## File: lib/app/providers.dart
+```dart
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:rctms/app/core/network/graphql_client.dart';
+import 'package:rctms/app/core/network/network_info.dart';
+import 'package:rctms/app/core/storage/secure_storage.dart';
+final secureStorageProvider = Provider<SecureStorage>((ref) {
+ return SecureStorage(const FlutterSecureStorage());
+});
+final networkInfoProvider = Provider<NetworkInfo>((ref) {
+ return NetworkInfoImpl(Connectivity());
+});
+final graphQLClientProvider = Provider<GraphQLClientProvider>((ref) {
+ final secureStorage = ref.watch(secureStorageProvider);
+ return GraphQLClientProvider(secureStorage);
+});
+```
+
+## File: lib/app/providers/auth_providers.dart
+```dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/core/storage/secure_storage.dart';
+import 'package:rctms/app/data/models/user_model.dart';
+import 'package:rctms/app/data/repositories/auth_repository.dart';
+import 'package:rctms/app/providers.dart' as app_providers;
+import 'package:rctms/app/providers.dart';
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+ final graphQLClient = ref.watch(app_providers.graphQLClientProvider);
+ return AuthRepository(graphQLClientProvider: graphQLClient);
+});
+class AuthState {
+ final UserModel? user;
+ final AsyncValue<void> authStatus;
+ final bool isAuthenticated;
+ 
+ AuthState({
+ this.user,
+ this.authStatus = const AsyncValue.data(null),
+ this.isAuthenticated = false,
+ });
+ 
+ AuthState copyWith({
+ UserModel? user,
+ AsyncValue<void>? authStatus,
+ bool? isAuthenticated,
+ }) {
+ return AuthState(
+ user: user ?? this.user,
+ authStatus: authStatus ?? this.authStatus,
+ isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+ );
+ }
+}
+class AuthNotifier extends StateNotifier<AuthState> {
+ final AuthRepository _authRepository;
+ final SecureStorage _secureStorage;
+ 
+ AuthNotifier({
+ required AuthRepository authRepository,
+ required SecureStorage secureStorage,
+ }) : _authRepository = authRepository,
+ _secureStorage = secureStorage,
+ super(AuthState());
+ 
+ Future<void> register(String email, String username, String password) async {
+ state = state.copyWith(authStatus: const AsyncValue.loading());
+ 
+ try {
+ final result = await _authRepository.register(email, username, password);
+ final user = result['user'] as UserModel;
+ final token = result['token'] as String;
+ 
+ await _secureStorage.storeAuthToken(token);
+ await _secureStorage.storeUserId(user.id);
+ 
+ state = state.copyWith(
+ user: user,
+ authStatus: const AsyncValue.data(null),
+ isAuthenticated: true,
+ );
+ } catch (e) {
+ state = state.copyWith(
+ authStatus: AsyncValue.error(e, StackTrace.current),
+ isAuthenticated: false,
+ );
+ }
+ }
+ 
+ Future<void> login(String email, String password) async {
+ state = state.copyWith(authStatus: const AsyncValue.loading());
+ 
+ try {
+ final result = await _authRepository.login(email, password);
+ final user = result['user'] as UserModel;
+ final token = result['token'] as String;
+ 
+ await _secureStorage.storeAuthToken(token);
+ await _secureStorage.storeUserId(user.id);
+ 
+ state = state.copyWith(
+ user: user,
+ authStatus: const AsyncValue.data(null),
+ isAuthenticated: true,
+ );
+ } catch (e) {
+ state = state.copyWith(
+ authStatus: AsyncValue.error(e, StackTrace.current),
+ isAuthenticated: false,
+ );
+ }
+ }
+ 
+ Future<void> checkAuthStatus() async {
+ state = state.copyWith(authStatus: const AsyncValue.loading());
+ 
+ try {
+ final token = await _secureStorage.getAuthToken();
+ 
+ if (token == null) {
+ state = state.copyWith(
+ authStatus: const AsyncValue.data(null),
+ isAuthenticated: false,
+ );
+ return;
+ }
+ 
+ final user = await _authRepository.getCurrentUser();
+ 
+ if (user != null) {
+ state = state.copyWith(
+ user: user,
+ authStatus: const AsyncValue.data(null),
+ isAuthenticated: true,
+ );
+ } else {
+ await _secureStorage.clearAll();
+ state = state.copyWith(
+ authStatus: const AsyncValue.data(null),
+ isAuthenticated: false,
+ );
+ }
+ } catch (e) {
+ state = state.copyWith(
+ authStatus: AsyncValue.error(e, StackTrace.current),
+ isAuthenticated: false,
+ );
+ }
+ }
+ 
+ Future<void> logout() async {
+ await _secureStorage.clearAll();
+ state = AuthState();
+ }
+}
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+ final authRepository = ref.watch(authRepositoryProvider);
+ final secureStorage = ref.watch(secureStorageProvider);
+ 
+ return AuthNotifier(
+ authRepository: authRepository,
+ secureStorage: secureStorage,
+ );
+});
+```
+
+## File: lib/app/router.dart
+```dart
+class AppRouter {
+}
+```
+
+## File: lib/app/theme.dart
+```dart
+import 'package:flutter/material.dart';
+class AppTheme {
+ AppTheme._();
+ 
+ static const Color primaryColor = Color(0xFF3F51B5);
+ static const Color accentColor = Color(0xFFFF4081);
+ static const Color errorColor = Color(0xFFE53935);
+ 
+ static final ThemeData lightTheme = ThemeData(
+ useMaterial3: true,
+ colorScheme: const ColorScheme.light(
+ primary: primaryColor,
+ secondary: accentColor,
+ error: errorColor,
+ ),
+ appBarTheme: const AppBarTheme(
+ elevation: 0,
+ centerTitle: true,
+ ),
+ cardTheme: const CardTheme(
+ elevation: 2,
+ shape: RoundedRectangleBorder(
+ borderRadius: BorderRadius.all(Radius.circular(12)),
+ ),
+ ),
+ elevatedButtonTheme: ElevatedButtonThemeData(
+ style: ElevatedButton.styleFrom(
+ padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+ shape: RoundedRectangleBorder(
+ borderRadius: BorderRadius.circular(8),
+ ),
+ ),
+ ),
+ inputDecorationTheme: InputDecorationTheme(
+ border: OutlineInputBorder(
+ borderRadius: BorderRadius.circular(8),
+ ),
+ filled: true,
+ contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+ ),
+ );
+ 
+ static final ThemeData darkTheme = ThemeData(
+ useMaterial3: true,
+ colorScheme: const ColorScheme.dark(
+ primary: primaryColor,
+ secondary: accentColor,
+ error: errorColor,
+ ),
+ appBarTheme: const AppBarTheme(
+ elevation: 0,
+ centerTitle: true,
+ ),
+ cardTheme: const CardTheme(
+ elevation: 2,
+ shape: RoundedRectangleBorder(
+ borderRadius: BorderRadius.all(Radius.circular(12)),
+ ),
+ ),
+ elevatedButtonTheme: ElevatedButtonThemeData(
+ style: ElevatedButton.styleFrom(
+ padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+ shape: RoundedRectangleBorder(
+ borderRadius: BorderRadius.circular(8),
+ ),
+ ),
+ ),
+ inputDecorationTheme: InputDecorationTheme(
+ border: OutlineInputBorder(
+ borderRadius: BorderRadius.circular(8),
+ ),
+ filled: true,
+ contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+ ),
+ );
+}
+```
+
+## File: lib/main.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:rctms/app/app.dart';
+void main() async {
+ WidgetsFlutterBinding.ensureInitialized();
+ 
+ await Hive.initFlutter();
+ 
+ 
+ 
+ runApp(
+ const ProviderScope(
+ child: RCTMSApp(),
+ ),
+ );
+}
+```
+
