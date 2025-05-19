@@ -1,5 +1,5 @@
 # Flutter Project Knowledge Base
-# Created on Mon May 19 15:10:03 MSK 2025
+# Created on Mon May 19 17:21:22 MSK 2025
 # Contents from ./lib directory
 
 ## File: lib/app/app.dart
@@ -57,8 +57,6 @@ class ApiConstants {
  static const String graphqlEndpoint = '$baseUrl/api/graphql';
  static const String socketEndpoint = '$baseUrl/socket';
  
- static const String loginEndpoint = '$baseUrl/api/users/sign_in';
- static const String registerEndpoint = '$baseUrl/api/users';
  
  static const Map<String, String> defaultHeaders = {
  'Content-Type': 'application/json',
@@ -714,6 +712,295 @@ class AuthRepository {
 }
 ```
 
+## File: lib/app/data/repositories/project_repository.dart
+```dart
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:rctms/app/core/errors/exceptions.dart' as app_exceptions;
+import 'package:rctms/app/core/network/graphql_client.dart';
+import 'package:rctms/app/data/models/project_model.dart';
+class ProjectRepository {
+ final GraphQLClientProvider graphQLClientProvider;
+ ProjectRepository({required this.graphQLClientProvider});
+ Future<List<ProjectModel>> getProjects({
+ String? searchQuery,
+ int page = 1,
+ int perPage = 10,
+ }) async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ const String query = r'''
+ query Projects($filter: ProjectFilterInput!) {
+ projects_paginated(filter: $filter) {
+ entries {
+ id
+ name
+ description
+ owner {
+ id
+ username
+ email
+ }
+ insertedAt
+ updatedAt
+ }
+ pageNumber
+ pageSize
+ totalEntries
+ totalPages
+ }
+ }
+ ''';
+ final Map<String, dynamic> variables = {
+ 'filter': {
+ if (searchQuery != null && searchQuery.isNotEmpty) 'search': searchQuery,
+ 'page': page,
+ 'perPage': perPage,
+ }
+ };
+ final QueryOptions options = QueryOptions(
+ document: gql(query),
+ variables: variables,
+ );
+ final QueryResult result = await client.query(options);
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ throw app_exceptions.ServerException(
+ result.exception!.graphqlErrors.first.message);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException(
+ "Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Failed to fetch projects');
+ }
+ final projectsData = result.data!['projects_paginated']['entries'] as List<dynamic>;
+ 
+ return projectsData
+ .map((project) => ProjectModel.fromJson({
+ 'id': project['id'],
+ 'name': project['name'],
+ 'description': project['description'],
+ 'ownerId': project['owner']['id'],
+ 'createdAt': project['insertedAt'],
+ 'updatedAt': project['updatedAt'],
+ }))
+ .toList();
+ } catch (e) {
+ if (e is app_exceptions.ServerException ||
+ e is app_exceptions.NetworkException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+ Future<ProjectModel> getProjectById(String id) async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ const String query = r'''
+ query GetProject($id: ID!) {
+ project(id: $id) {
+ id
+ name
+ description
+ owner {
+ id
+ username
+ email
+ }
+ insertedAt
+ updatedAt
+ }
+ }
+ ''';
+ final QueryOptions options = QueryOptions(
+ document: gql(query),
+ variables: {'id': id},
+ );
+ final QueryResult result = await client.query(options);
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ throw app_exceptions.ServerException(
+ result.exception!.graphqlErrors.first.message);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException(
+ "Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Failed to fetch project');
+ }
+ final projectData = result.data!['project'];
+ 
+ return ProjectModel.fromJson({
+ 'id': projectData['id'],
+ 'name': projectData['name'],
+ 'description': projectData['description'],
+ 'ownerId': projectData['owner']['id'],
+ 'createdAt': projectData['insertedAt'],
+ 'updatedAt': projectData['updatedAt'],
+ });
+ } catch (e) {
+ if (e is app_exceptions.ServerException ||
+ e is app_exceptions.NetworkException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+ Future<ProjectModel> createProject(String name, String? description) async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ const String mutation = r'''
+ mutation CreateProject($input: ProjectInput!) {
+ createProject(input: $input) {
+ id
+ name
+ description
+ owner {
+ id
+ username
+ email
+ }
+ insertedAt
+ updatedAt
+ }
+ }
+ ''';
+ final MutationOptions options = MutationOptions(
+ document: gql(mutation),
+ variables: {
+ 'input': {
+ 'name': name,
+ 'description': description,
+ }
+ },
+ );
+ final QueryResult result = await client.mutate(options);
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ throw app_exceptions.ServerException(
+ result.exception!.graphqlErrors.first.message);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException(
+ "Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Failed to create project');
+ }
+ final projectData = result.data!['createProject'];
+ 
+ return ProjectModel.fromJson({
+ 'id': projectData['id'],
+ 'name': projectData['name'],
+ 'description': projectData['description'],
+ 'ownerId': projectData['owner']['id'],
+ 'createdAt': projectData['insertedAt'],
+ 'updatedAt': projectData['updatedAt'],
+ });
+ } catch (e) {
+ if (e is app_exceptions.ServerException ||
+ e is app_exceptions.NetworkException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+ Future<ProjectModel> updateProject(String id, String name, String? description) async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ const String mutation = r'''
+ mutation UpdateProject($id: ID!, $input: ProjectInput!) {
+ updateProject(id: $id, input: $input) {
+ id
+ name
+ description
+ owner {
+ id
+ username
+ email
+ }
+ insertedAt
+ updatedAt
+ }
+ }
+ ''';
+ final MutationOptions options = MutationOptions(
+ document: gql(mutation),
+ variables: {
+ 'id': id,
+ 'input': {
+ 'name': name,
+ 'description': description,
+ }
+ },
+ );
+ final QueryResult result = await client.mutate(options);
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ throw app_exceptions.ServerException(
+ result.exception!.graphqlErrors.first.message);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException(
+ "Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Failed to update project');
+ }
+ final projectData = result.data!['updateProject'];
+ 
+ return ProjectModel.fromJson({
+ 'id': projectData['id'],
+ 'name': projectData['name'],
+ 'description': projectData['description'],
+ 'ownerId': projectData['owner']['id'],
+ 'createdAt': projectData['insertedAt'],
+ 'updatedAt': projectData['updatedAt'],
+ });
+ } catch (e) {
+ if (e is app_exceptions.ServerException ||
+ e is app_exceptions.NetworkException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+ Future<bool> deleteProject(String id) async {
+ try {
+ final client = await graphQLClientProvider.getClient();
+ const String mutation = r'''
+ mutation DeleteProject($id: ID!) {
+ deleteProject(id: $id) {
+ id
+ }
+ }
+ ''';
+ final MutationOptions options = MutationOptions(
+ document: gql(mutation),
+ variables: {'id': id},
+ );
+ final QueryResult result = await client.mutate(options);
+ if (result.hasException) {
+ if (result.exception!.graphqlErrors.isNotEmpty) {
+ throw app_exceptions.ServerException(
+ result.exception!.graphqlErrors.first.message);
+ }
+ if (result.exception!.linkException != null) {
+ throw app_exceptions.NetworkException(
+ "Connection error: Unable to connect to server");
+ }
+ throw app_exceptions.ServerException('Failed to delete project');
+ }
+ return true;
+ } catch (e) {
+ if (e is app_exceptions.ServerException ||
+ e is app_exceptions.NetworkException) {
+ rethrow;
+ }
+ throw app_exceptions.NetworkException('Connection error: ${e.toString()}');
+ }
+ }
+}
+```
+
 ## File: lib/app/domain/entities/comment.dart
 ```dart
 class Comment {
@@ -1276,6 +1563,7 @@ class RegisterFormState extends ConsumerState<RegisterForm> {
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rctms/app/presentation/auth/screens/login_screen.dart';
+import 'package:rctms/app/presentation/projects/screens/projects_screen.dart';
 import 'package:rctms/app/providers/auth_providers.dart';
 class HomeScreen extends ConsumerWidget {
  const HomeScreen({super.key});
@@ -1324,19 +1612,855 @@ class HomeScreen extends ConsumerWidget {
  ),
  ),
  const SizedBox(height: 24),
+ Card(
+ child: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.start,
+ children: [
  const Text(
- 'This is the home screen of the RCTMS app.',
- style: TextStyle(fontSize: 16),
+ 'Menu',
+ style: TextStyle(
+ fontSize: 18,
+ fontWeight: FontWeight.bold,
+ ),
  ),
  const SizedBox(height: 16),
- const Text(
- 'Here you will see your projects and tasks.',
- style: TextStyle(fontSize: 16),
+ ListTile(
+ leading: const Icon(Icons.folder),
+ title: const Text('Projects'),
+ subtitle: const Text('Manage your projects'),
+ trailing: const Icon(Icons.arrow_forward_ios),
+ onTap: () {
+ Navigator.of(context).push(
+ MaterialPageRoute(
+ builder: (_) => const ProjectsScreen(),
+ ),
+ );
+ },
+ ),
+ const Divider(),
+ ListTile(
+ leading: const Icon(Icons.task),
+ title: const Text('My Tasks'),
+ subtitle: const Text('View tasks assigned to you'),
+ trailing: const Icon(Icons.arrow_forward_ios),
+ onTap: () {
+ ScaffoldMessenger.of(context).showSnackBar(
+ const SnackBar(
+ content: Text('Tasks screen will be implemented soon'),
+ ),
+ );
+ },
+ ),
+ ],
+ ),
+ ),
  ),
  ],
  ),
  ),
  );
+ }
+}
+```
+
+## File: lib/app/presentation/projects/screens/create_project_screen.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/providers/project_providers.dart';
+class CreateProjectScreen extends ConsumerStatefulWidget {
+ const CreateProjectScreen({Key? key}) : super(key: key);
+ @override
+ CreateProjectScreenState createState() => CreateProjectScreenState();
+}
+class CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
+ final _formKey = GlobalKey<FormState>();
+ final _nameController = TextEditingController();
+ final _descriptionController = TextEditingController();
+ 
+ bool _isLoading = false;
+ String? _errorMessage;
+ @override
+ void dispose() {
+ _nameController.dispose();
+ _descriptionController.dispose();
+ super.dispose();
+ }
+ @override
+ Widget build(BuildContext context) {
+ return Scaffold(
+ appBar: AppBar(
+ title: const Text('Create Project'),
+ ),
+ body: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Form(
+ key: _formKey,
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.start,
+ children: [
+ TextFormField(
+ controller: _nameController,
+ decoration: const InputDecoration(
+ labelText: 'Project Name',
+ hintText: 'Enter project name',
+ ),
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please enter a project name';
+ }
+ if (value.length < 3) {
+ return 'Project name must be at least 3 characters';
+ }
+ return null;
+ },
+ ),
+ const SizedBox(height: 16),
+ TextFormField(
+ controller: _descriptionController,
+ decoration: const InputDecoration(
+ labelText: 'Description (Optional)',
+ hintText: 'Enter project description',
+ ),
+ maxLines: 5,
+ ),
+ if (_errorMessage != null)
+ Padding(
+ padding: const EdgeInsets.only(top: 16.0),
+ child: Text(
+ _errorMessage!,
+ style: const TextStyle(color: Colors.red),
+ ),
+ ),
+ const SizedBox(height: 24),
+ SizedBox(
+ width: double.infinity,
+ height: 50,
+ child: ElevatedButton(
+ onPressed: _isLoading ? null : _createProject,
+ child: _isLoading
+ ? const CircularProgressIndicator()
+ : const Text('Create Project'),
+ ),
+ ),
+ ],
+ ),
+ ),
+ ),
+ );
+ }
+ Future<void> _createProject() async {
+ if (!_formKey.currentState!.validate()) {
+ return;
+ }
+ setState(() {
+ _isLoading = true;
+ _errorMessage = null;
+ });
+ try {
+ await ref.read(projectProvider.notifier).createProject(
+ _nameController.text.trim(),
+ _descriptionController.text.isEmpty
+ ? null
+ : _descriptionController.text.trim(),
+ );
+ if (mounted) {
+ Navigator.of(context).pop();
+ }
+ } catch (e) {
+ setState(() {
+ _errorMessage = 'Failed to create project: ${e.toString()}';
+ });
+ } finally {
+ setState(() {
+ _isLoading = false;
+ });
+ }
+ }
+}
+```
+
+## File: lib/app/presentation/projects/screens/edit_project_screen.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/data/models/project_model.dart';
+import 'package:rctms/app/providers/project_providers.dart';
+class EditProjectScreen extends ConsumerStatefulWidget {
+ final ProjectModel project;
+ const EditProjectScreen({
+ Key? key,
+ required this.project,
+ }) : super(key: key);
+ @override
+ EditProjectScreenState createState() => EditProjectScreenState();
+}
+class EditProjectScreenState extends ConsumerState<EditProjectScreen> {
+ final _formKey = GlobalKey<FormState>();
+ late final TextEditingController _nameController;
+ late final TextEditingController _descriptionController;
+ 
+ bool _isLoading = false;
+ String? _errorMessage;
+ @override
+ void initState() {
+ super.initState();
+ _nameController = TextEditingController(text: widget.project.name);
+ _descriptionController = TextEditingController(text: widget.project.description);
+ }
+ @override
+ void dispose() {
+ _nameController.dispose();
+ _descriptionController.dispose();
+ super.dispose();
+ }
+ @override
+ Widget build(BuildContext context) {
+ return Scaffold(
+ appBar: AppBar(
+ title: const Text('Edit Project'),
+ ),
+ body: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Form(
+ key: _formKey,
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.start,
+ children: [
+ TextFormField(
+ controller: _nameController,
+ decoration: const InputDecoration(
+ labelText: 'Project Name',
+ hintText: 'Enter project name',
+ ),
+ validator: (value) {
+ if (value == null || value.isEmpty) {
+ return 'Please enter a project name';
+ }
+ if (value.length < 3) {
+ return 'Project name must be at least 3 characters';
+ }
+ return null;
+ },
+ ),
+ const SizedBox(height: 16),
+ TextFormField(
+ controller: _descriptionController,
+ decoration: const InputDecoration(
+ labelText: 'Description (Optional)',
+ hintText: 'Enter project description',
+ ),
+ maxLines: 5,
+ ),
+ if (_errorMessage != null)
+ Padding(
+ padding: const EdgeInsets.only(top: 16.0),
+ child: Text(
+ _errorMessage!,
+ style: const TextStyle(color: Colors.red),
+ ),
+ ),
+ const SizedBox(height: 24),
+ SizedBox(
+ width: double.infinity,
+ height: 50,
+ child: ElevatedButton(
+ onPressed: _isLoading ? null : _updateProject,
+ child: _isLoading
+ ? const CircularProgressIndicator()
+ : const Text('Save Changes'),
+ ),
+ ),
+ ],
+ ),
+ ),
+ ),
+ );
+ }
+ Future<void> _updateProject() async {
+ if (!_formKey.currentState!.validate()) {
+ return;
+ }
+ setState(() {
+ _isLoading = true;
+ _errorMessage = null;
+ });
+ try {
+ await ref.read(projectProvider.notifier).updateProject(
+ widget.project.id,
+ _nameController.text.trim(),
+ _descriptionController.text.isEmpty
+ ? null
+ : _descriptionController.text.trim(),
+ );
+ if (mounted) {
+ Navigator.of(context).pop();
+ ScaffoldMessenger.of(context).showSnackBar(
+ const SnackBar(
+ content: Text('Project updated successfully'),
+ backgroundColor: Colors.green,
+ ),
+ );
+ }
+ } catch (e) {
+ setState(() {
+ _errorMessage = 'Failed to update project: ${e.toString()}';
+ });
+ } finally {
+ setState(() {
+ _isLoading = false;
+ });
+ }
+ }
+}
+```
+
+## File: lib/app/presentation/projects/screens/project_details_screen.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/presentation/projects/screens/edit_project_screen.dart';
+import 'package:rctms/app/providers/project_providers.dart';
+class ProjectDetailsScreen extends ConsumerStatefulWidget {
+ final String projectId;
+ const ProjectDetailsScreen({
+ Key? key,
+ required this.projectId,
+ }) : super(key: key);
+ @override
+ ProjectDetailsScreenState createState() => ProjectDetailsScreenState();
+}
+class ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
+ @override
+ void initState() {
+ super.initState();
+ WidgetsBinding.instance.addPostFrameCallback((_) {
+ ref.read(projectProvider.notifier).getProject(widget.projectId);
+ });
+ }
+ @override
+ Widget build(BuildContext context) {
+ final projectState = ref.watch(projectProvider);
+ return Scaffold(
+ appBar: AppBar(
+ title: Text(
+ projectState.project.value?.name ?? 'Project Details',
+ ),
+ actions: [
+ IconButton(
+ icon: const Icon(Icons.edit),
+ onPressed: projectState.project.value == null
+ ? null
+ : () {
+ Navigator.of(context).push(
+ MaterialPageRoute(
+ builder: (_) => EditProjectScreen(
+ project: projectState.project.value!,
+ ),
+ ),
+ ).then((_) {
+ ref
+ .read(projectProvider.notifier)
+ .getProject(widget.projectId);
+ });
+ },
+ ),
+ IconButton(
+ icon: const Icon(Icons.delete),
+ onPressed: projectState.project.value == null
+ ? null
+ : () {
+ _showDeleteConfirmationDialog(context);
+ },
+ ),
+ ],
+ ),
+ body: projectState.project.when(
+ data: (project) {
+ if (project == null) {
+ return const Center(
+ child: Text('Project not found'),
+ );
+ }
+ return SingleChildScrollView(
+ padding: const EdgeInsets.all(16.0),
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.start,
+ children: [
+ const Text(
+ 'Project Name',
+ style: TextStyle(
+ fontWeight: FontWeight.bold,
+ fontSize: 16,
+ color: Colors.grey,
+ ),
+ ),
+ const SizedBox(height: 8),
+ Text(
+ project.name,
+ style: const TextStyle(
+ fontSize: 22,
+ fontWeight: FontWeight.bold,
+ ),
+ ),
+ const SizedBox(height: 16),
+ const Text(
+ 'Description',
+ style: TextStyle(
+ fontWeight: FontWeight.bold,
+ fontSize: 16,
+ color: Colors.grey,
+ ),
+ ),
+ const SizedBox(height: 8),
+ Text(
+ project.description ?? 'No description provided',
+ style: const TextStyle(fontSize: 16),
+ ),
+ const SizedBox(height: 24),
+ const Divider(),
+ const SizedBox(height: 16),
+ Text(
+ 'Created: ${_formatDate(project.createdAt)}',
+ style: const TextStyle(color: Colors.grey),
+ ),
+ const SizedBox(height: 8),
+ Text(
+ 'Last Updated: ${_formatDate(project.updatedAt)}',
+ style: const TextStyle(color: Colors.grey),
+ ),
+ const SizedBox(height: 32),
+ const Divider(),
+ const SizedBox(height: 16),
+ const Text(
+ 'Tasks',
+ style: TextStyle(
+ fontSize: 20,
+ fontWeight: FontWeight.bold,
+ ),
+ ),
+ const SizedBox(height: 16),
+ const Center(
+ child: Text(
+ 'No tasks yet',
+ style: TextStyle(
+ color: Colors.grey,
+ fontSize: 16,
+ ),
+ ),
+ ),
+ const SizedBox(height: 16),
+ SizedBox(
+ width: double.infinity,
+ child: ElevatedButton.icon(
+ onPressed: () {
+ ScaffoldMessenger.of(context).showSnackBar(
+ const SnackBar(
+ content: Text('Task creation will be implemented soon'),
+ ),
+ );
+ },
+ icon: const Icon(Icons.add),
+ label: const Text('Add Task'),
+ ),
+ ),
+ ],
+ ),
+ );
+ },
+ loading: () => const Center(
+ child: CircularProgressIndicator(),
+ ),
+ error: (error, stackTrace) => Center(
+ child: Column(
+ mainAxisAlignment: MainAxisAlignment.center,
+ children: [
+ const Icon(
+ Icons.error_outline,
+ size: 64,
+ color: Colors.red,
+ ),
+ const SizedBox(height: 16),
+ Text(
+ 'Error loading project: ${error.toString()}',
+ textAlign: TextAlign.center,
+ style: const TextStyle(color: Colors.red),
+ ),
+ const SizedBox(height: 16),
+ ElevatedButton(
+ onPressed: () {
+ ref.read(projectProvider.notifier).getProject(widget.projectId);
+ },
+ child: const Text('Retry'),
+ ),
+ ],
+ ),
+ ),
+ ),
+ );
+ }
+ String _formatDate(DateTime date) {
+ return '${date.day}/${date.month}/${date.year}';
+ }
+ void _showDeleteConfirmationDialog(BuildContext context) {
+ showDialog(
+ context: context,
+ builder: (context) => AlertDialog(
+ title: const Text('Delete Project?'),
+ content: const Text(
+ 'Are you sure you want to delete this project? This action cannot be undone.',
+ ),
+ actions: [
+ TextButton(
+ onPressed: () {
+ Navigator.of(context).pop();
+ },
+ child: const Text('Cancel'),
+ ),
+ TextButton(
+ onPressed: () async {
+ Navigator.of(context).pop();
+ _deleteProject();
+ },
+ child: const Text(
+ 'Delete',
+ style: TextStyle(color: Colors.red),
+ ),
+ ),
+ ],
+ ),
+ );
+ }
+ Future<void> _deleteProject() async {
+ final navigator = Navigator.of(context);
+ final scaffoldMessenger = ScaffoldMessenger.of(context);
+ 
+ showDialog(
+ context: context,
+ barrierDismissible: false,
+ builder: (context) => const Center(
+ child: CircularProgressIndicator(),
+ ),
+ );
+ try {
+ final success = await ref
+ .read(projectProvider.notifier)
+ .deleteProject(widget.projectId);
+ if (!mounted) return;
+ 
+ navigator.pop();
+ if (success) {
+ navigator.pop(); // Возвращаемся на предыдущий экран
+ 
+ scaffoldMessenger.showSnackBar(
+ const SnackBar(
+ content: Text('Project deleted successfully'),
+ backgroundColor: Colors.green,
+ ),
+ );
+ } else {
+ scaffoldMessenger.showSnackBar(
+ const SnackBar(
+ content: Text('Failed to delete project'),
+ backgroundColor: Colors.red,
+ ),
+ );
+ }
+ } catch (e) {
+ if (!mounted) return;
+ 
+ navigator.pop();
+ scaffoldMessenger.showSnackBar(
+ SnackBar(
+ content: Text('Error: ${e.toString()}'),
+ backgroundColor: Colors.red,
+ ),
+ );
+ }
+}
+}
+```
+
+## File: lib/app/presentation/projects/screens/projects_screen.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/presentation/projects/screens/create_project_screen.dart';
+import 'package:rctms/app/presentation/projects/screens/project_details_screen.dart';
+import 'package:rctms/app/presentation/projects/widgets/project_list_item.dart';
+import 'package:rctms/app/providers/project_providers.dart';
+class ProjectsScreen extends ConsumerStatefulWidget {
+ const ProjectsScreen({Key? key}) : super(key: key);
+ @override
+ ProjectsScreenState createState() => ProjectsScreenState();
+}
+class ProjectsScreenState extends ConsumerState<ProjectsScreen> {
+ final ScrollController _scrollController = ScrollController();
+ final TextEditingController _searchController = TextEditingController();
+ 
+ @override
+ void initState() {
+ super.initState();
+ _scrollController.addListener(_onScroll);
+ 
+ WidgetsBinding.instance.addPostFrameCallback((_) {
+ ref.read(projectsProvider.notifier).getProjects();
+ });
+ }
+ @override
+ void dispose() {
+ _scrollController.removeListener(_onScroll);
+ _scrollController.dispose();
+ _searchController.dispose();
+ super.dispose();
+ }
+ void _onScroll() {
+ if (_scrollController.position.pixels >=
+ _scrollController.position.maxScrollExtent - 200) {
+ ref.read(projectsProvider.notifier).loadMoreProjects();
+ }
+ }
+ @override
+ Widget build(BuildContext context) {
+ final projectsState = ref.watch(projectsProvider);
+ 
+ return Scaffold(
+ appBar: AppBar(
+ title: const Text('Projects'),
+ actions: [
+ IconButton(
+ icon: const Icon(Icons.add),
+ onPressed: () {
+ Navigator.of(context).push(
+ MaterialPageRoute(
+ builder: (_) => const CreateProjectScreen(),
+ ),
+ ).then((_) {
+ ref.read(projectsProvider.notifier).refreshProjects();
+ });
+ },
+ ),
+ ],
+ ),
+ body: Column(
+ children: [
+ Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: TextField(
+ controller: _searchController,
+ decoration: InputDecoration(
+ hintText: 'Search projects...',
+ prefixIcon: const Icon(Icons.search),
+ suffixIcon: _searchController.text.isNotEmpty
+ ? IconButton(
+ icon: const Icon(Icons.clear),
+ onPressed: () {
+ _searchController.clear();
+ ref.read(projectsProvider.notifier).searchProjects('');
+ },
+ )
+ : null,
+ border: OutlineInputBorder(
+ borderRadius: BorderRadius.circular(8.0),
+ ),
+ ),
+ onChanged: (value) {
+ Future.delayed(const Duration(milliseconds: 500), () {
+ if (_searchController.text == value) {
+ ref.read(projectsProvider.notifier).searchProjects(value);
+ }
+ });
+ },
+ ),
+ ),
+ Expanded(
+ child: RefreshIndicator(
+ onRefresh: () async {
+ await ref.read(projectsProvider.notifier).refreshProjects();
+ },
+ child: projectsState.projects.when(
+ data: (projects) {
+ if (projects.isEmpty) {
+ return Center(
+ child: Column(
+ mainAxisAlignment: MainAxisAlignment.center,
+ children: [
+ const Icon(
+ Icons.folder_open,
+ size: 64,
+ color: Colors.grey,
+ ),
+ const SizedBox(height: 16),
+ Text(
+ projectsState.searchQuery != null && 
+ projectsState.searchQuery!.isNotEmpty
+ ? 'No projects found for "${projectsState.searchQuery}"'
+ : 'No projects yet',
+ style: const TextStyle(
+ fontSize: 18,
+ color: Colors.grey,
+ ),
+ ),
+ const SizedBox(height: 16),
+ ElevatedButton.icon(
+ onPressed: () {
+ Navigator.of(context).push(
+ MaterialPageRoute(
+ builder: (_) => const CreateProjectScreen(),
+ ),
+ ).then((_) {
+ ref.read(projectsProvider.notifier).refreshProjects();
+ });
+ },
+ icon: const Icon(Icons.add),
+ label: const Text('Create New Project'),
+ ),
+ ],
+ ),
+ );
+ }
+ 
+ return ListView.builder(
+ controller: _scrollController,
+ padding: const EdgeInsets.all(16.0),
+ itemCount: projects.length + (projectsState.hasMore ? 1 : 0),
+ itemBuilder: (context, index) {
+ if (index == projects.length) {
+ return const Center(
+ child: Padding(
+ padding: EdgeInsets.symmetric(vertical: 16.0),
+ child: CircularProgressIndicator(),
+ ),
+ );
+ }
+ 
+ final project = projects[index];
+ return ProjectListItem(
+ project: project,
+ onTap: () {
+ Navigator.of(context).push(
+ MaterialPageRoute(
+ builder: (_) => ProjectDetailsScreen(
+ projectId: project.id,
+ ),
+ ),
+ ).then((_) {
+ ref.read(projectsProvider.notifier).refreshProjects();
+ });
+ },
+ );
+ },
+ );
+ },
+ loading: () => const Center(
+ child: CircularProgressIndicator(),
+ ),
+ error: (error, stackTrace) => Center(
+ child: Column(
+ mainAxisAlignment: MainAxisAlignment.center,
+ children: [
+ const Icon(
+ Icons.error_outline,
+ size: 64,
+ color: Colors.red,
+ ),
+ const SizedBox(height: 16),
+ Text(
+ 'Error loading projects: ${error.toString()}',
+ textAlign: TextAlign.center,
+ style: const TextStyle(color: Colors.red),
+ ),
+ const SizedBox(height: 16),
+ ElevatedButton(
+ onPressed: () {
+ ref.read(projectsProvider.notifier).refreshProjects();
+ },
+ child: const Text('Retry'),
+ ),
+ ],
+ ),
+ ),
+ ),
+ ),
+ ),
+ ],
+ ),
+ );
+ }
+}
+```
+
+## File: lib/app/presentation/projects/widgets/project_list_item.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:rctms/app/data/models/project_model.dart';
+class ProjectListItem extends StatelessWidget {
+ final ProjectModel project;
+ final VoidCallback onTap;
+ const ProjectListItem({
+ Key? key,
+ required this.project,
+ required this.onTap,
+ }) : super(key: key);
+ @override
+ Widget build(BuildContext context) {
+ return Card(
+ margin: const EdgeInsets.only(bottom: 16.0),
+ child: InkWell(
+ onTap: onTap,
+ borderRadius: BorderRadius.circular(12.0),
+ child: Padding(
+ padding: const EdgeInsets.all(16.0),
+ child: Column(
+ crossAxisAlignment: CrossAxisAlignment.start,
+ children: [
+ Text(
+ project.name,
+ style: const TextStyle(
+ fontSize: 18,
+ fontWeight: FontWeight.bold,
+ ),
+ ),
+ if (project.description != null && project.description!.isNotEmpty)
+ Padding(
+ padding: const EdgeInsets.only(top: 8.0),
+ child: Text(
+ project.description!,
+ maxLines: 2,
+ overflow: TextOverflow.ellipsis,
+ style: TextStyle(
+ color: Colors.grey[600],
+ ),
+ ),
+ ),
+ const SizedBox(height: 16.0),
+ Row(
+ mainAxisAlignment: MainAxisAlignment.spaceBetween,
+ children: [
+ Text(
+ 'Created: ${_formatDate(project.createdAt)}',
+ style: TextStyle(
+ color: Colors.grey[600],
+ fontSize: 12,
+ ),
+ ),
+ Icon(
+ Icons.arrow_forward_ios,
+ size: 14,
+ color: Colors.grey[400],
+ ),
+ ],
+ ),
+ ],
+ ),
+ ),
+ ),
+ );
+ }
+ String _formatDate(DateTime date) {
+ return '${date.day}/${date.month}/${date.year}';
  }
 }
 ```
@@ -1505,6 +2629,204 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
  authRepository: authRepository,
  secureStorage: secureStorage,
  );
+});
+```
+
+## File: lib/app/providers/project_providers.dart
+```dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rctms/app/data/models/project_model.dart';
+import 'package:rctms/app/data/repositories/project_repository.dart';
+import 'package:rctms/app/providers.dart';
+final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+ final graphQLClient = ref.watch(graphQLClientProvider);
+ return ProjectRepository(graphQLClientProvider: graphQLClient);
+});
+class ProjectsState {
+ final AsyncValue<List<ProjectModel>> projects;
+ final String? searchQuery;
+ final int currentPage;
+ final int totalPages;
+ final bool hasMore;
+ ProjectsState({
+ this.projects = const AsyncValue.loading(),
+ this.searchQuery,
+ this.currentPage = 1,
+ this.totalPages = 1,
+ this.hasMore = false,
+ });
+ ProjectsState copyWith({
+ AsyncValue<List<ProjectModel>>? projects,
+ String? searchQuery,
+ int? currentPage,
+ int? totalPages,
+ bool? hasMore,
+ }) {
+ return ProjectsState(
+ projects: projects ?? this.projects,
+ searchQuery: searchQuery ?? this.searchQuery,
+ currentPage: currentPage ?? this.currentPage,
+ totalPages: totalPages ?? this.totalPages,
+ hasMore: hasMore ?? this.hasMore,
+ );
+ }
+}
+class ProjectsNotifier extends StateNotifier<ProjectsState> {
+ final ProjectRepository _projectRepository;
+ ProjectsNotifier({required ProjectRepository projectRepository})
+ : _projectRepository = projectRepository,
+ super(ProjectsState());
+ Future<void> getProjects({String? searchQuery, bool refresh = false}) async {
+ if (refresh) {
+ state = state.copyWith(
+ projects: const AsyncValue.loading(),
+ currentPage: 1,
+ searchQuery: searchQuery,
+ );
+ } else if (searchQuery != state.searchQuery) {
+ state = state.copyWith(
+ searchQuery: searchQuery,
+ currentPage: 1,
+ );
+ }
+ try {
+ final projects = await _projectRepository.getProjects(
+ searchQuery: state.searchQuery,
+ page: state.currentPage,
+ perPage: 10,
+ );
+ state = state.copyWith(
+ projects: AsyncValue.data(projects),
+ hasMore: projects.length >= 10, // Предполагаем, что есть еще, если получили полную страницу
+ totalPages: (projects.length / 10).ceil(), // Предполагаемое количество страниц
+ );
+ } catch (e) {
+ state = state.copyWith(
+ projects: AsyncValue.error(e, StackTrace.current),
+ );
+ }
+ }
+ Future<void> loadMoreProjects() async {
+ if (!state.hasMore || state.projects is AsyncLoading) {
+ return;
+ }
+ final currentProjects = state.projects.value ?? [];
+ try {
+ state = state.copyWith(
+ currentPage: state.currentPage + 1,
+ );
+ final newProjects = await _projectRepository.getProjects(
+ searchQuery: state.searchQuery,
+ page: state.currentPage,
+ perPage: 10,
+ );
+ state = state.copyWith(
+ projects: AsyncValue.data([...currentProjects, ...newProjects]),
+ hasMore: newProjects.length >= 10, // Есть ли еще проекты для загрузки
+ );
+ } catch (e) {
+ state = state.copyWith(
+ currentPage: state.currentPage - 1, // Возвращаем предыдущую страницу
+ projects: AsyncValue.data(currentProjects),
+ );
+ }
+ }
+ Future<void> searchProjects(String query) async {
+ state = state.copyWith(
+ searchQuery: query,
+ currentPage: 1,
+ projects: const AsyncValue.loading(),
+ );
+ try {
+ final projects = await _projectRepository.getProjects(
+ searchQuery: query,
+ page: 1,
+ perPage: 10,
+ );
+ state = state.copyWith(
+ projects: AsyncValue.data(projects),
+ hasMore: projects.length >= 10,
+ );
+ } catch (e) {
+ state = state.copyWith(
+ projects: AsyncValue.error(e, StackTrace.current),
+ );
+ }
+ }
+ Future<void> refreshProjects() async {
+ await getProjects(searchQuery: state.searchQuery, refresh: true);
+ }
+}
+final projectsProvider = StateNotifierProvider<ProjectsNotifier, ProjectsState>((ref) {
+ final projectRepository = ref.watch(projectRepositoryProvider);
+ return ProjectsNotifier(projectRepository: projectRepository);
+});
+class ProjectState {
+ final AsyncValue<ProjectModel?> project;
+ ProjectState({
+ this.project = const AsyncValue.loading(),
+ });
+ ProjectState copyWith({
+ AsyncValue<ProjectModel?>? project,
+ }) {
+ return ProjectState(
+ project: project ?? this.project,
+ );
+ }
+}
+class ProjectNotifier extends StateNotifier<ProjectState> {
+ final ProjectRepository _projectRepository;
+ ProjectNotifier({required ProjectRepository projectRepository})
+ : _projectRepository = projectRepository,
+ super(ProjectState());
+ Future<void> getProject(String id) async {
+ state = ProjectState(project: const AsyncValue.loading());
+ try {
+ final project = await _projectRepository.getProjectById(id);
+ state = state.copyWith(project: AsyncValue.data(project));
+ } catch (e) {
+ state = state.copyWith(
+ project: AsyncValue.error(e, StackTrace.current),
+ );
+ }
+ }
+ Future<void> createProject(String name, String? description) async {
+ state = ProjectState(project: const AsyncValue.loading());
+ try {
+ final createdProject = await _projectRepository.createProject(name, description);
+ state = state.copyWith(project: AsyncValue.data(createdProject));
+ } catch (e) {
+ state = state.copyWith(
+ project: AsyncValue.error(e, StackTrace.current),
+ );
+ }
+ }
+ Future<void> updateProject(String id, String name, String? description) async {
+ state = ProjectState(project: const AsyncValue.loading());
+ try {
+ final updatedProject = await _projectRepository.updateProject(id, name, description);
+ state = state.copyWith(project: AsyncValue.data(updatedProject));
+ } catch (e) {
+ state = state.copyWith(
+ project: AsyncValue.error(e, StackTrace.current),
+ );
+ }
+ }
+ Future<bool> deleteProject(String id) async {
+ try {
+ final result = await _projectRepository.deleteProject(id);
+ if (result) {
+ state = state.copyWith(project: const AsyncValue.data(null));
+ }
+ return result;
+ } catch (e) {
+ return false;
+ }
+ }
+}
+final projectProvider = StateNotifierProvider.autoDispose<ProjectNotifier, ProjectState>((ref) {
+ final projectRepository = ref.watch(projectRepositoryProvider);
+ return ProjectNotifier(projectRepository: projectRepository);
 });
 ```
 

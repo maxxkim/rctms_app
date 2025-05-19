@@ -1,6 +1,8 @@
+// lib/app/presentation/home/screens/home_screen.dart (обновление)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rctms/app/presentation/auth/screens/login_screen.dart';
+import 'package:rctms/app/presentation/projects/screens/projects_screen.dart';
 import 'package:rctms/app/providers/auth_providers.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -17,7 +19,6 @@ class HomeScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              // Capture navigator before async operation
               final navigator = Navigator.of(context);
               
               ref.read(authProvider.notifier).logout().then((_) {
@@ -51,14 +52,51 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'This is the home screen of the RCTMS app.',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Here you will see your projects and tasks.',
-              style: TextStyle(fontSize: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Menu',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      leading: const Icon(Icons.folder),
+                      title: const Text('Projects'),
+                      subtitle: const Text('Manage your projects'),
+                      trailing: const Icon(Icons.arrow_forward_ios),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ProjectsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.task),
+                      title: const Text('My Tasks'),
+                      subtitle: const Text('View tasks assigned to you'),
+                      trailing: const Icon(Icons.arrow_forward_ios),
+                      onTap: () {
+                        // TODO: Реализовать экран задач
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Tasks screen will be implemented soon'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
