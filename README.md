@@ -247,12 +247,12 @@ final token = await secureStorage.getAuthToken();
 ```
 
 ## 🎨 Скриншоты
-
-<div style="display: flex; justify-content: space-between;">
-  <img src="screenshots/login_screen.png" width="30%" alt="Login Screen"/>
-  <img src="screenshots/projects_screen.png" width="30%" alt="Projects Screen"/>
-  <img src="screenshots/tasks_screen.png" width="30%" alt="Tasks Screen"/>
-</div>
+![Simulator Screenshot - iPhone 16 Plus - 2025-05-19 at 17 26 27](https://github.com/user-attachments/assets/52d5d3b5-0f25-42fa-90eb-9edde7624ed4)
+![Simulator Screenshot - iPhone 16 Plus - 2025-05-19 at 17 26 33](https://github.com/user-attachments/assets/5d5ad3bd-b4c8-48f5-a41e-4dc21ede2f66)
+![Simulator Screenshot - iPhone 16 Plus - 2025-05-19 at 17 26 53](https://github.com/user-attachments/assets/700c5930-c004-47d6-b403-1f2aa9993d48)
+![Simulator Screenshot - iPhone 16 Plus - 2025-05-19 at 17 26 57](https://github.com/user-attachments/assets/a5027890-2a36-445b-9b41-721dfa2db14d)
+![Simulator Screenshot - iPhone 16 Plus - 2025-05-19 at 17 27 01](https://github.com/user-attachments/assets/42302ee8-a5c3-4a9e-951f-a57a2ae7124b)
+![Simulator Screenshot - iPhone 16 Plus - 2025-05-19 at 17 27 24](https://github.com/user-attachments/assets/7a836360-0572-42de-b97f-6ab7c9670e67)
 
 ## 🧰 Используемые технологии
 
