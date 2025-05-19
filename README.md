@@ -9,7 +9,7 @@
 
 ## 🔗 Связанные проекты
 
-- [RCTMS Backend](https://github.com/your-username/rctms-backend) - Бэкенд на Elixir/Phoenix для данного приложения
+- [RCTMS Backend](https://github.com/maxxkim/rctms_backend) - Бэкенд на Elixir/Phoenix для данного приложения
 
 ## 📖 Обзор проекта
 
